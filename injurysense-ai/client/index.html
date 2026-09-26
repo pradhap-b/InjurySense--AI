@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1220" />
+    <title>InjurySense AI — Detect. Analyze. Prevent. Perform Safer.</title>
+    <style>
+      .runtime-status{position:fixed;z-index:100;top:92px;right:14px;display:flex;align-items:center;gap:10px;max-width:min(460px,calc(100vw - 28px));padding:9px 12px;border:1px solid #32465b;border-radius:8px;background:#101e30;color:#eef6ff;box-shadow:0 8px 24px rgba(0,0,0,.28);font:12px/1.4 ui-sans-serif,system-ui,sans-serif}
+      .runtime-status strong{flex:none;color:#f7c65f;font-size:10px;letter-spacing:.08em}
+      .runtime-status span{color:#bdcad7}
+      .runtime-status[data-state="online"] strong{color:#55e6a5}
+      .runtime-status[data-state="limited"] strong{color:#f7c65f}
+      @media(max-width:700px){.runtime-status{top:auto;right:10px;bottom:10px;left:10px;max-width:none}}
+    </style>
+  </head>
+  <body>
+    <div id="runtime-status" class="runtime-status" role="status" aria-live="polite">
+      <strong>CHECKING</strong><span>Checking backend availability...</span>
+    </div>
+    <div id="root"></div>
+    <script>
+      (() => {
+        const status = document.getElementById('runtime-status');
+        const setStatus = (title, message, state) => {
+          if (!status) return;
+          status.dataset.state = state;
+          status.replaceChildren(Object.assign(document.createElement('strong'), { textContent: title }), Object.assign(document.createElement('span'), { textContent: message }));
+        };
+        try {
+          window.localStorage.getItem('__injurysense_storage_check__');
+        } catch {
+          const values = new Map();
+          const memoryStorage = {
+            getItem: key => values.has(String(key)) ? values.get(String(key)) : null,
+            setItem: (key, value) => values.set(String(key), String(value)),
+            removeItem: key => values.delete(String(key)),
+            clear: () => values.clear(),
+            key: index => Array.from(values.keys())[index] ?? null,
+            get length() { return values.size; }
+          };
+          try { Object.defineProperty(window, 'localStorage', { configurable: true, value: memoryStorage }); } catch {}
+        }
+        try {
+          const savedUser = window.localStorage.getItem('injurysenseUser');
+          if (savedUser) JSON.parse(savedUser);
+        } catch {
+          try { window.localStorage.removeItem('injurysenseUser'); } catch {}
+        }
+        window.addEventListener('error', event => console.error('Application error:', event.error));
+        window.addEventListener('unhandledrejection', event => console.error('Unhandled promise:', event.reason));
+        window.addEventListener('injurysense:api-status', event => {
+          if (event.detail?.available) setStatus('BACKEND ONLINE', 'Connected features are available.', 'online');
+          else setStatus('OFFLINE MODE', 'Backend unavailable. Local interface is running; accounts, saved reports, and cloud AI need the backend.', 'offline');
+        });
+        if (window.location.protocol === 'file:') {
+          setStatus('OFFLINE MODE', 'Backend unavailable. Local interface is running; accounts, saved reports, and cloud AI need the backend.', 'offline');
+          return;
+        }
+        fetch('/api/health').then(async response => {
+          const health = await response.json().catch(() => ({}));
+          if (health.server === 'online') setStatus('BACKEND ONLINE', health.database === 'connected' ? 'Backend and database are available.' : 'Backend online; database-backed features are limited.', health.database === 'connected' ? 'online' : 'limited');
+          else setStatus('OFFLINE MODE', 'Backend unavailable. Local interface is running; saved reports and cloud AI need the backend.', 'offline');
+        }).catch(() => setStatus('OFFLINE MODE', 'Backend unavailable. Local interface is running; accounts, saved reports, and cloud AI need the backend.', 'offline'));
+      })();
+    </script>
+    <script type="module" src="./src/main.jsx"></script>
+  </body>
+</html>
